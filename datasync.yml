@@ -1,0 +1,93 @@
+
+Resources:
+
+  PullListings:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'PullListings'
+      Handler: 'lambda_function.lambda_handler'
+      Role: !GetAtt 'PullListingsRole.Arn'
+      Code:
+        S3Bucket: 'kkudylambdazips'
+        S3Key: 'PullACTListings'
+      Runtime: python3.8
+      Timeout: 300
+
+  PullListingsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: 'PullListingsRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - 'lambda.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: 'AWSLambdaBasicExecutionRole'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+        - PolicyName: 'AmazonS3FullAccess'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:DeleteObject
+                Resource: arn:aws:s3:::kkudylambdazips/*
+              - Effect: Allow
+                Action:
+                - s3:ListBucketMultipartUploads
+                - s3:AbortMultipartUpload
+                - s3:ListMultipartUploadParts
+                Resource:
+                - arn:aws:s3:::kkudylambdazips
+                - arn:aws:s3:::kkudylambdazips/*
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: "*"
+
+
+        - PolicyName: 'ssm_read'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'ssm:DescribeParameters'
+                Resource: '*'
+            Statement:
+              - Effect: Allow
+                Action: 'ssm:GetParameter'
+                Resource: 'arn:aws:ssm:us-west-2:639253933720:parameter/*'
+
+  PullListingsSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: 'PullListingsSchedule'
+      Description: 'Triggers a download'
+      ScheduleExpression: rate(2 days)
+      Targets:
+        - Arn: !GetAtt 'PullListings.Arn'
+          Id: 'PullListingsScheduleTarget'
+      State: 'ENABLED'
+
+  PullListingsScheduleInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PullListings
+      Action: lambda:InvokeFunction
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt 'PullListingsSchedule.Arn'
